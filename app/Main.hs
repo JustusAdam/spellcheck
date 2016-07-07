@@ -1,21 +1,18 @@
-{-# LANGUAGE TemplateHaskell, OverloadedStrings, NoImplicitPrelude #-}
+{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TemplateHaskell   #-}
 
 
-import ClassyPrelude
-import           Control.Monad
-import           Data.HashSet (HashSet)
-import qualified Data.HashSet as HSet
-import           Data.Maybe
-import           Data.Traversable
+import           ClassyPrelude
+import qualified Data.HashSet               as HSet
+import           Data.List                  ((!!))
+import qualified Data.List                  as List
+import qualified Data.Text                  as T
+import qualified Data.Text.IO               as T
 import           Language.Haskell.TH
 import           Language.Haskell.TH.Syntax
 import           Text.Read
 import           Text.Spellcheck
-import qualified Data.Text.IO as T
-import qualified Data.Text as T
-import Data.Text (Text)
-import Data.List ((!!))
-import qualified Data.List as List
 
 
 pforest :: PrefixMap
@@ -47,14 +44,14 @@ checkFile input output = do
                         putStrLn "Did you mean one of (press enter to see more):"
                         let matches = matchWord word pforest
                         let loop remaining = do
-                                let (alternatives, rem) = List.splitAt 4 remaining
-                                for alternatives $ \(i, alt) ->
+                                let (alternatives, rem') = List.splitAt 4 remaining
+                                for_ alternatives $ \(i, alt) ->
                                     putStrLn $ pack (show i) ++ ") " ++ alt
                                 l <- getLine
                                 case readMaybe l of
                                     Just i -> return i
-                                    _ -> loop rem
-                        i <- loop $ zip [0..] matches
+                                    _ -> loop rem'
+                        i <- loop $ zip [0 :: Int ..] matches
                         return $ matches !! i)
 
 
@@ -69,7 +66,7 @@ interactive = forever $ do
                 putStrLn $ "You typed " ++ w
                 putStrLn "Did you mean one of:"
                 let alternatives = take 4 $ matchWord w pforest
-                for alternatives putStrLn
+                for_ alternatives putStrLn
                 void $ asText <$> getLine
 
 
