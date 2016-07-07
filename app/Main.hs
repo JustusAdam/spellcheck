@@ -1,16 +1,21 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell, OverloadedStrings, NoImplicitPrelude #-}
 
 
+import ClassyPrelude
 import           Control.Monad
-import           Data.Foldable
-import           Data.HashSet
+import           Data.HashSet (HashSet)
+import qualified Data.HashSet as HSet
 import           Data.Maybe
 import           Data.Traversable
 import           Language.Haskell.TH
 import           Language.Haskell.TH.Syntax
-import           System.Environment
 import           Text.Read
 import           Text.Spellcheck
+import qualified Data.Text.IO as T
+import qualified Data.Text as T
+import Data.Text (Text)
+import Data.List ((!!))
+import qualified Data.List as List
 
 
 pforest :: PrefixMap
@@ -18,23 +23,23 @@ pforest = $(do
     qAddDependentFile "words"
 
     f <- runIO $ readFile "words"
-    return $ VarE 'mkPrefixForest `AppE` (ListE []) `AppE` (AppE (VarE 'lines) (LitE (StringL f)))
+    return $ VarE 'mkPrefixForest `AppE` (ListE []) `AppE` ( VarE 'T.lines `AppE` (VarE 'T.pack `AppE` LitE (StringL f)))
     )
 
 
-allWords :: HashSet String
+allWords :: HashSet Text
 allWords = $(do
     f <- runIO $ readFile "words"
-    return $ VarE 'fromList `AppE` (VarE 'lines `AppE` (LitE (StringL f)))
+    return $ VarE 'HSet.fromList `AppE` (VarE 'T.lines `AppE` (VarE 'T.pack `AppE` LitE (StringL f)))
     )
 
 
 checkFile :: FilePath -> FilePath -> IO ()
 checkFile input output = do
-    contents <- readFile input
-    writeFile output . unlines =<<
-        for (lines contents) (\line ->
-            fmap unwords $ for (words line) $ \word ->
+    contents <- T.readFile input
+    T.writeFile output . T.unlines =<<
+        for (T.lines contents) (\line ->
+            fmap T.unwords $ for (T.words line) $ \word ->
                 if word `member` allWords
                     then return word
                     else do
@@ -42,9 +47,9 @@ checkFile input output = do
                         putStrLn "Did you mean one of (press enter to see more):"
                         let matches = matchWord word pforest
                         let loop remaining = do
-                                let (alternatives, rem) = splitAt 4 remaining
+                                let (alternatives, rem) = List.splitAt 4 remaining
                                 for alternatives $ \(i, alt) ->
-                                    putStrLn $ show i ++ ") " ++ alt
+                                    putStrLn $ pack (show i) ++ ") " ++ alt
                                 l <- getLine
                                 case readMaybe l of
                                     Just i -> return i
@@ -65,14 +70,14 @@ interactive = forever $ do
                 putStrLn "Did you mean one of:"
                 let alternatives = take 4 $ matchWord w pforest
                 for alternatives putStrLn
-                void $ getLine
+                void $ asText <$> getLine
 
 
 
 
 main :: IO ()
 main = do
-    args <- getArgs
+    args <- map unpack <$> getArgs
     case args of
         [] -> interactive
         [input, output] -> checkFile input output

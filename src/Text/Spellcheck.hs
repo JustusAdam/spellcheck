@@ -1,21 +1,25 @@
-{-# LANGUAGE LambdaCase        #-}
-{-# LANGUAGE NoImplicitPrelude #-}
+{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE LambdaCase            #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE NoImplicitPrelude     #-}
 module Text.Spellcheck where
 
 
 import           ClassyPrelude
-import           Control.Lens
-import           Control.Monad.State.Lazy (evalState, get, modify, put)
+import           Control.Monad.State.Class (MonadState)
+import           Control.Monad.State.Lazy  (evalState, get, modify, put)
 import           Control.Monad.Writer
-import qualified Data.HashMap.Strict      as HMap
-import qualified Data.HashSet             as HSet
-import           Data.IntMap              (findMin, fromListWith)
-import qualified Data.IntMap              as IMap
+import qualified Data.HashMap.Strict       as HMap
+import qualified Data.HashSet              as HSet
+import           Data.IntMap               (findMin, fromListWith)
+import qualified Data.IntMap               as IMap
+import qualified Data.Text                 as T
 import           Data.Tree
 
 
-type PrefixMap = Forest (Char, Maybe String)
-newtype EditMap = MkEditMap { unEditMap :: IntMap ([String], EditMap) }
+type PrefixMap = Forest (Char, Maybe Text)
+type EMapValue = (HashSet Text, EditMap)
+newtype EditMap = MkEditMap { unEditMap :: IntMap EMapValue }
 
 
 deleteCost :: Int
@@ -63,43 +67,45 @@ replaceCost typed expected =
 
 
 
-mkPrefixForest :: String -> [String] -> PrefixMap
+mkPrefixForest :: String -> [Text] -> PrefixMap
 mkPrefixForest revPrefix = map f . groupBy hasSamePrefix . sort
   where
-    hasSamePrefix (x:_) (y:_) = x == y
-    hasSamePrefix [] [] = error "unexpected empty list"
-    hasSamePrefix _ _ = False
+    hasSamePrefix x y =  T.head x == T.head y
 
-    f words@((head:_):_) = Node (head, if null nulls then Nothing else Just (reverse (head:revPrefix))) $ mkPrefixForest (head:revPrefix) substrings
+    f words@(x:_) = Node (head, if null nulls then Nothing else Just (T.pack $ reverse $ head:revPrefix)) $ mkPrefixForest (head:revPrefix) substrings
       where
-        (nulls, substrings) = partition null $ map tailEx words
+        head = T.head x
+        (nulls, substrings) = partition T.null $ map tailEx words
     f _ = error "empty list from groupBy"
 
 
-editMapCombiner (str1, emap1) (str2, emap2) = (str1 ++ str2, MkEditMap $ unionWith editMapCombiner (unEditMap emap1) (unEditMap emap2))
+editMapCombiner ::EMapValue -> EMapValue -> EMapValue
+editMapCombiner (str1, emap1) (str2, emap2) = (str1 `HSet.union` str2, MkEditMap $ unionWith editMapCombiner (unEditMap emap1) (unEditMap emap2))
 
 
 mkCompletionMap :: PrefixMap -> EditMap
 mkCompletionMap = MkEditMap . fromListWith editMapCombiner . map f
   where
-    f (Node (_, word) subf) = (insertCost, (maybe [] return word, mkCompletionMap subf))
+    f (Node (_, word) subf) = (insertCost, (maybe HSet.empty HSet.singleton word, mkCompletionMap subf))
 
 
-mkEditMap :: PrefixMap -> String -> EditMap
-mkEditMap pmap [] = mkCompletionMap pmap
-mkEditMap pmap s@(currChar:rest) = emap
-  where
-    emap = MkEditMap $ fromListWith editMapCombiner $ pmap >>= f
-    f (Node (c, word) subf) =
-        let weight = if c == currChar then 0 else replaceCost currChar c
-        in
-            [ (weight, ([], mkEditMap subf rest))
-            , (deleteCost, ([], mkEditMap pmap rest))
-            , (insertCost, ([], mkEditMap subf s))
-            ]
-            ++ maybe [] (\w -> [(weight + length rest, ([w], MkEditMap $ IMap.empty))]) word
+mkEditMap :: PrefixMap -> Text -> EditMap
+mkEditMap pmap s =
+    case T.uncons s of
+        Nothing -> mkCompletionMap pmap
+        Just (currChar,rest) -> MkEditMap $ fromListWith editMapCombiner $ pmap >>= f
+          where
+            f (Node (c, word) subf) =
+                let weight = if c == currChar then 0 else replaceCost currChar c
+                in
+                    [ (weight, (HSet.empty, mkEditMap subf rest))
+                    , (deleteCost, (HSet.empty, mkEditMap pmap rest))
+                    , (insertCost, (HSet.empty, mkEditMap subf s))
+                    ]
+                    ++ maybe [] (\w -> [(weight + length rest, (HSet.singleton w, MkEditMap $ IMap.empty))]) word
 
 
+extractMin :: MonadState (IntMap EMapValue) m => m (IMap.Key, EMapValue)
 extractMin = do
     s <- get
     let (i, s') = IMap.deleteFindMin s
@@ -107,11 +113,11 @@ extractMin = do
     return i
 
 
-matchWord :: String -> PrefixMap -> [String]
-matchWord w pmap = evalState comp (IMap.fromList [(0, ([], mkEditMap pmap w)), (length w, ([w], MkEditMap IMap.empty))])
+matchWord :: Text -> PrefixMap -> [Text]
+matchWord w pmap = evalState comp (IMap.fromList [(0, (HSet.empty, mkEditMap pmap w)), (T.length w, (HSet.singleton w, MkEditMap IMap.empty))])
   where
     comp = do
         (cost, (words, innerMap)) <- extractMin
         let updated = IMap.mapKeys (+cost) $ unEditMap innerMap
         modify (unionWith editMapCombiner updated)
-        fmap (words ++) comp
+        fmap (HSet.toList words ++) comp
