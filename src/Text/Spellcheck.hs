@@ -8,10 +8,9 @@ module Text.Spellcheck where
 import           ClassyPrelude
 import           Control.Monad.State.Class (MonadState)
 import           Control.Monad.State.Lazy  (evalState, get, modify, put)
-import           Control.Monad.Writer
 import qualified Data.HashMap.Strict       as HMap
 import qualified Data.HashSet              as HSet
-import           Data.IntMap               (findMin, fromListWith)
+import           Data.IntMap               (fromListWith)
 import qualified Data.IntMap               as IMap
 import qualified Data.Text                 as T
 import           Data.Tree
@@ -63,7 +62,7 @@ replaceCost :: Char -> Char -> Int
 replaceCost typed expected =
     case HSet.member expected <$> HMap.lookup typed costReduction of
         Just True -> 1
-        Nothing -> 3
+        _ -> 3
 
 
 
@@ -72,10 +71,10 @@ mkPrefixForest revPrefix = map f . groupBy hasSamePrefix . sort
   where
     hasSamePrefix x y =  T.head x == T.head y
 
-    f words@(x:_) = Node (head, if null nulls then Nothing else Just (T.pack $ reverse $ head:revPrefix)) $ mkPrefixForest (head:revPrefix) substrings
+    f words'@(x:_) = Node (head', if null nulls then Nothing else Just (T.pack $ reverse $ head':revPrefix)) $ mkPrefixForest (head':revPrefix) substrings
       where
-        head = T.head x
-        (nulls, substrings) = partition T.null $ map tailEx words
+        head' = T.head x
+        (nulls, substrings) = partition T.null $ map tailEx words'
     f _ = error "empty list from groupBy"
 
 
@@ -117,7 +116,7 @@ matchWord :: Text -> PrefixMap -> [Text]
 matchWord w pmap = evalState comp (IMap.fromList [(0, (HSet.empty, mkEditMap pmap w)), (T.length w, (HSet.singleton w, MkEditMap IMap.empty))])
   where
     comp = do
-        (cost, (words, innerMap)) <- extractMin
+        (cost, (words', innerMap)) <- extractMin
         let updated = IMap.mapKeys (+cost) $ unEditMap innerMap
         modify (unionWith editMapCombiner updated)
-        fmap (HSet.toList words ++) comp
+        fmap (HSet.toList words' ++) comp
