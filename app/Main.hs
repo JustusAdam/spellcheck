@@ -20,14 +20,16 @@ pforest = $(do
     qAddDependentFile "words"
 
     f <- runIO $ readFile "words"
-    return $ VarE 'mkPrefixForest `AppE` (ListE []) `AppE` ( VarE 'T.lines `AppE` (VarE 'T.pack `AppE` LitE (StringL f)))
+    let wrds = VarE 'T.words `AppE` LitE (StringL f)
+    return $ VarE 'mkPrefixForest `AppE` (ListE []) `AppE` wrds
     )
 
 
 allWords :: HashSet Text
 allWords = $(do
     f <- runIO $ readFile "words"
-    return $ VarE 'HSet.fromList `AppE` (VarE 'T.lines `AppE` (VarE 'T.pack `AppE` LitE (StringL f)))
+    let wrds = VarE 'T.words `AppE` LitE (StringL f)
+    return $ VarE 'HSet.fromList `AppE` wrds
     )
 
 

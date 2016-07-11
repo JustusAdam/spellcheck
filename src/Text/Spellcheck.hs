@@ -79,7 +79,7 @@ mkPrefixForest revPrefix = map f . groupBy hasSamePrefix . sort
 
 
 editMapCombiner ::EMapValue -> EMapValue -> EMapValue
-editMapCombiner (str1, emap1) (str2, emap2) = (str1 `HSet.union` str2, MkEditMap $ unionWith editMapCombiner (unEditMap emap1) (unEditMap emap2))
+editMapCombiner (str1, emap1) (str2, emap2) = (str1 `union` str2, MkEditMap $ unionWith editMapCombiner (unEditMap emap1) (unEditMap emap2))
 
 
 mkCompletionMap :: PrefixMap -> EditMap
