@@ -24,27 +24,27 @@ library
                      , classy-prelude
   default-language:    Haskell2010
 
-executable spellcheck-exe
-  hs-source-dirs:      app
-  main-is:             Main.hs
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N -Wall
-  build-depends:       base
-                     , spellcheck
-                     , template-haskell
-                     , classy-prelude
-                     , text
-                     , unordered-containers
-  default-language:    Haskell2010
-
-test-suite spellcheck-test
-  type:                exitcode-stdio-1.0
-  hs-source-dirs:      test
-  main-is:             Spec.hs
-  build-depends:       base
-                     , spellcheck
-                     , hspec
-  ghc-options:         -threaded -rtsopts -with-rtsopts=-N
-  default-language:    Haskell2010
+-- executable spellcheck-exe
+--   hs-source-dirs:      app
+--   main-is:             Main.hs
+--   ghc-options:         -threaded -rtsopts -with-rtsopts=-N -Wall
+--   build-depends:       base
+--                      , spellcheck
+--                      , template-haskell
+--                      , classy-prelude
+--                      , text
+--                      , unordered-containers
+--   default-language:    Haskell2010
+--
+-- test-suite spellcheck-test
+--   type:                exitcode-stdio-1.0
+--   hs-source-dirs:      test
+--   main-is:             Spec.hs
+--   build-depends:       base
+--                      , spellcheck
+--                      , hspec
+--   ghc-options:         -threaded -rtsopts -with-rtsopts=-N
+--   default-language:    Haskell2010
 
 source-repository head
   type:     git
