@@ -1,8 +1,5 @@
 {-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE LambdaCase            #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE NoImplicitPrelude     #-}
-{-# LANGUAGE TypeFamilies          #-}
+{-# LANGUAGE LambdaCase, ViewPatterns            #-}
 module Text.Spellcheck where
 
 
@@ -13,7 +10,6 @@ import qualified Data.HashMap.Strict       as HMap
 import qualified Data.HashSet              as HSet
 import           Data.IntMap               (fromListWith)
 import qualified Data.IntMap               as IMap
-import qualified Data.Text                 as T
 import           Data.Tree
 
 
@@ -70,17 +66,16 @@ costReduction = mapFromList $ map (second setFromList)
 
 
 replaceCost :: Char -> Char -> Int
-replaceCost typed expected =
-    case member expected <$> lookup typed costReduction of
-        Just True -> 1
-        _         -> 3
+replaceCost c                                        ((== c) -> True)           = 0
+replaceCost ((`lookup` costReduction) -> Just found) ((`member` found) -> True) = 1
+replaceCost _                                        _                          = 3
 
 
 
 mkPrefixForest :: String -> [Text] -> PrefixMap
 mkPrefixForest revPrefix = map f . groupBy hasSamePrefix . sort
   where
-    hasSamePrefix x y =  headEx x == headEx y
+    hasSamePrefix = (==) `on` headEx
 
     f words'@(x:_) = Node label subtree
       where
@@ -108,22 +103,19 @@ mkCompletionMap = MkEditMap . fromListWith editMapCombiner . map f
 
 
 mkEditMap :: PrefixMap -> Text -> EditMap
-mkEditMap pmap s =
-    case uncons s of
-        Nothing -> mkCompletionMap pmap
-        Just (currChar,rest) -> MkEditMap $ fromListWith editMapCombiner $ pmap >>= f
-          where
-            f (Node (c, word) subf) =
-                let weight
-                      | c == currChar = 0
-                      | otherwise = replaceCost currChar c
-                    wordToEntry w = [(weight + length rest, singleWordReached w)]
-                in
-                    [ (weight    , onlySubeditsFrom subf rest)
-                    , (deleteCost, onlySubeditsFrom pmap rest)
-                    , (insertCost, onlySubeditsFrom subf s   )
-                    ]
-                    ++ maybe [] wordToEntry word
+mkEditMap pmap s@(uncons -> Just (currChar,rest)) =
+    MkEditMap $ fromListWith editMapCombiner $ pmap >>= f
+  where
+    f (Node (c, word) subf) =
+        let weight = replaceCost currChar c
+            wordToEntry w = [(weight + length rest, singleWordReached w)]
+        in
+            [ (weight    , onlySubeditsFrom subf rest)
+            , (deleteCost, onlySubeditsFrom pmap rest)
+            , (insertCost, onlySubeditsFrom subf s   )
+            ]
+            ++ maybe [] wordToEntry word
+mkEditMap pmap _ = mkCompletionMap pmap
 
 
 extractMin :: MonadState (IntMap EMapValue) m => m (Maybe (IMap.Key, EMapValue))

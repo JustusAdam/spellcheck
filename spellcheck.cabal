@@ -23,6 +23,12 @@ library
                      , unordered-containers
                      , classy-prelude
   default-language:    Haskell2010
+  ghc-options:         -Wall
+  default-extensions:  NoImplicitPrelude
+                     , TypeFamilies
+                     , MultiParamTypeClasses
+                     , TupleSections
+                     , OverloadedStrings
 
 executable spellcheck-exe
   hs-source-dirs:      app
@@ -35,6 +41,11 @@ executable spellcheck-exe
                      , text
                      , unordered-containers
   default-language:    Haskell2010
+  default-extensions:  NoImplicitPrelude
+                     , TypeFamilies
+                     , MultiParamTypeClasses
+                     , TupleSections
+                     , OverloadedStrings
 
 test-suite spellcheck-test
   type:                exitcode-stdio-1.0

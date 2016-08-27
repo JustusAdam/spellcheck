@@ -1,44 +1,29 @@
-{-# LANGUAGE NoImplicitPrelude #-}
-{-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE TemplateHaskell   #-}
 
 
 import           ClassyPrelude
-import qualified Data.HashSet               as HSet
-import           Data.List                  ((!!))
-import qualified Data.List                  as List
-import qualified Data.Text                  as T
-import qualified Data.Text.IO               as T
 import           Language.Haskell.TH
 import           Language.Haskell.TH.Syntax
-import           Text.Read
 import           Text.Spellcheck
 
 
 pforest :: PrefixMap
-pforest = $(do
-    qAddDependentFile "words"
-
-    f <- runIO $ readFile "words"
-    let wrds = VarE 'T.words `AppE` LitE (StringL f)
-    return $ VarE 'mkPrefixForest `AppE` (ListE []) `AppE` wrds
-    )
+pforest = mkPrefixForest [] $ toList allWords
 
 
 allWords :: HashSet Text
-allWords = $(do
-    f <- runIO $ readFile "words"
-    let wrds = VarE 'T.words `AppE` LitE (StringL f)
-    return $ VarE 'HSet.fromList `AppE` wrds
+allWords = setFromList $ words $ $(do
+    qAddDependentFile "words"
+    LitE . StringL <$> runIO (readFile "words")
     )
 
 
 checkFile :: FilePath -> FilePath -> IO ()
 checkFile input output = do
-    contents <- T.readFile input
-    T.writeFile output . T.unlines =<<
-        for (T.lines contents) (\line ->
-            fmap T.unwords $ for (T.words line) $ \word ->
+    contents <- readFile input
+    writeFile output . unlines =<<
+        for (lines contents) (\line ->
+            fmap unwords $ for (words line) $ \word ->
                 if word `member` allWords
                     then return word
                     else do
@@ -46,22 +31,23 @@ checkFile input output = do
                         putStrLn "Did you mean one of (press enter to see more):"
                         let matches = matchWord word pforest
                         let loop remaining = do
-                                let (alternatives, rem') = List.splitAt 4 remaining
+                                let (alternatives, rem') = splitAt 4 remaining
                                 for_ alternatives $ \(i, alt) ->
                                     putStrLn $ pack (show i) ++ ") " ++ alt
+                                when (null alternatives) $ putStrLn "Sorry, no more alternatives found."
                                 l <- getLine
-                                case readMaybe l of
+                                case readMay (l :: Text) of
                                     Just i -> return i
                                     _ -> loop rem'
                         i <- loop $ zip [0 :: Int ..] matches
-                        return $ matches !! i)
+                        return $ matches `indexEx` i)
 
 
 interactive :: IO ()
 interactive = forever $ do
     putStrLn "Type some words to check"
     line <- getLine
-    for_ (words line) $ \w -> do
+    for_ (words line) $ \w ->
         if w `member` allWords
             then putStrLn $ w ++ " seems to be typed correctly"
             else do
