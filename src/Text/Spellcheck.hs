@@ -1,5 +1,6 @@
-{-# LANGUAGE FlexibleContexts      #-}
-{-# LANGUAGE LambdaCase, ViewPatterns            #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase       #-}
+{-# LANGUAGE ViewPatterns     #-}
 module Text.Spellcheck where
 
 
@@ -7,11 +8,10 @@ import           ClassyPrelude
 import           Control.Monad.State.Class (MonadState)
 import           Control.Monad.State.Lazy  (evalState, get, modify, put)
 import qualified Data.HashMap.Strict       as HMap
-import qualified Data.HashSet              as HSet
 import           Data.IntMap               (fromListWith)
 import qualified Data.IntMap               as IMap
+import           Data.List                 (nub)
 import           Data.Tree
-import Data.List (nub)
 
 
 type PrefixMap = Forest (Char, Maybe Text)
@@ -26,9 +26,9 @@ insertCost = 3
 
 
 emptyEMap :: EditMap
-emptyEMap = MkEditMap IMap.empty
+emptyEMap = MkEditMap mempty
 onlySubedits :: EditMap -> EMapValue
-onlySubedits = MkEMapValue HSet.empty
+onlySubedits = MkEMapValue mempty
 onlySubeditsFrom :: PrefixMap -> Text -> EMapValue
 onlySubeditsFrom = (onlySubedits .) . mkEditMap
 singleWordReached :: Text -> EMapValue
@@ -90,7 +90,7 @@ mkPrefixForest revPrefix = map f . groupBy hasSamePrefix . sort
     f _ = error "empty list from groupBy"
 
 
-editMapCombiner ::EMapValue -> EMapValue -> EMapValue
+editMapCombiner :: EMapValue -> EMapValue -> EMapValue
 editMapCombiner (MkEMapValue reached1 emap1) (MkEMapValue reached2 emap2) =
     MkEMapValue { reachedWords = reached1 `union` reached2
                 , subedits = MkEditMap $ unionWith editMapCombiner (unEditMap emap1) (unEditMap emap2)
@@ -100,7 +100,7 @@ editMapCombiner (MkEMapValue reached1 emap1) (MkEMapValue reached2 emap2) =
 mkCompletionMap :: PrefixMap -> EditMap
 mkCompletionMap = MkEditMap . fromListWith editMapCombiner . map f
   where
-    f (Node (_, word) subf) = (insertCost, MkEMapValue (maybe HSet.empty singletonSet word) (mkCompletionMap subf))
+    f (Node (_, word) subf) = (insertCost, MkEMapValue (maybe mempty singletonSet word) (mkCompletionMap subf))
 
 
 mkEditMap :: PrefixMap -> Text -> EditMap
