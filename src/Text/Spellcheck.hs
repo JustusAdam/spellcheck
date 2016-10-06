@@ -11,6 +11,7 @@ import qualified Data.HashSet              as HSet
 import           Data.IntMap               (fromListWith)
 import qualified Data.IntMap               as IMap
 import           Data.Tree
+import Data.List (nub)
 
 
 type PrefixMap = Forest (Char, Maybe Text)
@@ -130,7 +131,7 @@ extractMin = do
 
 
 matchWord :: Text -> PrefixMap -> [Text]
-matchWord w pmap = evalState comp initialMap
+matchWord w pmap = nub $ evalState comp initialMap
   where
     initialMap = mapFromList
         [ (0       , onlySubeditsFrom pmap w)
